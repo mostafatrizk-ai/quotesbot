@@ -1,0 +1,20 @@
+"""إعدادات النظام — pydantic-settings (skill: pydantic/pydantic)."""
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    app_name: str = "WhatsApp Outreach System"
+    database_url: str = "sqlite:///./data/outreach.db"
+    # WhatsApp Cloud API (Meta) — github.com/facebook
+    wa_cloud_token: str = ""
+    wa_cloud_phone_number_id: str = ""
+    wa_cloud_version: str = "v20.0"
+    webhook_verify_token: str = "change-me-verify-token"
+    # Rate limiting / anti-ban (skill: bandwith-io/ratelimit + jd/tenacity)
+    messages_per_minute: int = 20
+    max_burst: int = 5
+    jitter_seconds: float = 1.5
+    warmup_enabled: bool = True
+    provider: str = "mock"  # mock | cloud_api | baileys
+    api_key: str = "outreach-admin-key"
+
+settings = Settings()

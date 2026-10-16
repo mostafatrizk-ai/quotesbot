@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: sqlite:////srv/app/data/outreach.db
+      PROVIDER: ${PROVIDER:-mock}
+      WA_CLOUD_TOKEN: ${WA_CLOUD_TOKEN:-}
+      WA_CLOUD_PHONE_NUMBER_ID: ${WA_CLOUD_PHONE_NUMBER_ID:-}
+      API_KEY: ${API_KEY:-outreach-admin-key}
+    volumes: ["./data:/srv/app/data"]
+    restart: unless-stopped
