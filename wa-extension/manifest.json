@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "WA Outreach Pro — Anti-Ban Smart Campaigns",
+  "version": "1.0.0",
+  "description": "حملة واتساب ذكية داخل web.whatsapp.com مع حماية anti-ban كاملة وAI agent لمتابعة الردود.",
+  "permissions": ["storage", "alarms", "unlimitedStorage"],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://*.openrouter.ai/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["src/safety.js", "src/engine.js", "src/wa.js", "src/ai.js", "src/watchdog.js", "src/ui.js", "src/content.js"],
+      "css": ["src/ui.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WA Outreach Pro"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

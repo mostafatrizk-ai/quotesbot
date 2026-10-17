@@ -1,0 +1,45 @@
+/* WA Outreach Pro — لوحة التنسيقات (RTL) */
+#wao-panel {
+  position: fixed; top: 12px; left: 12px; z-index: 999999;
+  width: 380px; max-height: 92vh; overflow: hidden auto;
+  direction: rtl; text-align: right;
+  font-family: "Segoe UI", Tahoma, sans-serif; font-size: 13px;
+  background: #111b21; color: #e9edef;
+  border: 1px solid #2a3942; border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+#wao-panel.wao-collapsed .wao-body, #wao-panel.wao-collapsed .wao-tabs { display: none; }
+.wao-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #202c33; }
+.wao-title { font-weight: 700; flex: 1; }
+.wao-badge { padding: 2px 10px; border-radius: 999px; background: #3b4a54; font-size: 12px; }
+.wao-badge.green { background: #008069; } .wao-badge.red { background: #d34f4f; }
+.wao-min { background: none; border: none; color: #8696a0; cursor: pointer; font-size: 14px; }
+
+.wao-tabs { display: flex; gap: 4px; padding: 8px 10px; background: #202c33; }
+.wao-tabs button { flex: 1; padding: 6px 4px; border: none; border-radius: 8px; background: transparent; color: #aebac1; cursor: pointer; }
+.wao-tabs button.active { background: #00a884; color: #fff; }
+
+.wao-body { padding: 12px; }
+.wao-body label { display: block; margin: 8px 0 4px; color: #8696a0; }
+.wao-body textarea, .wao-body input[type="text"], .wao-body input[type="password"], .wao-body input[type="number"], #wao-one-phone, #wao-one-name, #wao-ai-key, #wao-ai-url, #wao-ai-model, .wao-body input:not([type]) {
+  width: 100%; box-sizing: border-box; padding: 7px; border-radius: 8px;
+  border: 1px solid #2a3942; background: #0b141a; color: #e9edef; font-family: inherit;
+}
+.wao-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.wao-body button { padding: 7px 12px; border: none; border-radius: 8px; cursor: pointer; background: #2a3942; color: #e9edef; }
+.wao-body button.primary { background: #00a884; color: #fff; }
+.wao-body button.danger { background: #d34f4f; color: #fff; }
+.wao-stats { margin-top: 10px; padding: 8px; background: #0b141a; border-radius: 8px; line-height: 1.9; }
+.wao-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.wao-note { color: #8696a0; font-size: 12px; }
+
+#wao-loglist { max-height: 320px; overflow: auto; }
+.wao-ev { padding: 4px 6px; border-bottom: 1px dashed #222e35; font-size: 12px; }
+.wao-sent { color: #00d09e; } .wao-fail, .wao-danger { color: #ff7b7b; }
+.wao-pause, .wao-break { color: #ffd479; } .wao-reply { color: #7cc4ff; }
+.wao-optout { color: #ff9f43; } .wao-ai-suggest { color: #c39bff; }
+
+.wao-q { padding: 3px 6px; border-bottom: 1px solid #222e35; font-size: 12px; }
+.wao-r { padding: 4px 6px; border-bottom: 1px dashed #222e35; font-size: 12px; }
+.r-interested { color: #00d09e; } .r-opt_out { color: #ff7b7b; }
+.r-question { color: #7cc4ff; } .r-not_interested { color: #ffd479; }
