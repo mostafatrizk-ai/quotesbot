@@ -21,7 +21,9 @@ app.include_router(webhook_router)
 app.include_router(admin_router)
 
 @app.get("/health")
-def health(): return {"status": "ok", "provider": settings.provider}
+def health():
+    from app.services import safety
+    return {"status": "ok", "provider": settings.provider, "guard": safety.stats()}
 
 @app.exception_handler(Exception)
 async def unhandled(request: Request, exc: Exception):

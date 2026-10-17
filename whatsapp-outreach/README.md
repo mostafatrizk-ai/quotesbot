@@ -58,3 +58,10 @@ python -m pytest -q   # 8 اختبارات تغطي التدفق الكامل
 4. لتخزين دائم: أضف Persistent Disk بمسار `/data` (أو اشترك في Postgres وحدّث `DATABASE_URL`).
 5. بعد النشر: لوحة الأدمن على `https://<your-app>.onrender.com/` والـ API docs على `/docs`.
 > ملاحظة: وضع `baileys` لا يعمل على استضافة بدون Node sidecar؛ استخدم `cloud_api` للإنتاج.
+
+## 🛡️ طبقة الحماية من الحظر (Anti-Ban Guard) — v2
+وحدة جديدة `app/services/safety.py` موصولة بمحرك الإرسال وWebhooks:
+- **حد يومي** لإجمالي الرسائل (`MAX_DAILY_MESSAGES=500`) — عند بلوغه تُعاد جدولة الرسائل تلقائيًا لليوم التالي
+- **Deduplication**: منع إرسال رقم لنفس الجهة خلال `DEDUP_WINDOW_SECONDS=3600` (يحمي من تداخل حملتين)
+- **Opt-out موسّع**: stop / optout / unsubscribe / إيقاف / إلغاء / قفي / خروج — عربي وإنجليزي، مع تطابق بداية الجملة ("stop now")
+- **حالة الحارس ظاهرة في `/health`**: `{"guard": {"sent_today": 42, "daily_cap": 500, ...}}`

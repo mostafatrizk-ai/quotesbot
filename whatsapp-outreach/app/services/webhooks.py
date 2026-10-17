@@ -4,6 +4,7 @@
 from sqlalchemy.orm import Session
 from app.core.logging import get_logger
 from app.db.models import Contact, InboxMessage, Message, MessageStatus, WebhookEvent
+from app.services.safety import is_opt_out_text
 
 log = get_logger("webhooks")
 
@@ -39,8 +40,8 @@ def process_webhook(db: Session, payload: dict) -> dict:
                 inbox = InboxMessage(phone=phone, text=text)
                 db.add(inbox)
                 handled["received"] += 1
-                # Opt-out تلقائي: كلمة STOP / إيقاف
-                if text.strip().lower() in ("stop", "optout", "إيقاف", "إلغاء"):
+                # Opt-out تلقائي: STOP / إيقاف (منطق موسّع في safety.is_opt_out_text)
+                if is_opt_out_text(text):
                     c = db.query(Contact).filter_by(phone="+" + phone.lstrip("+")).first()
                     if c:
                         c.opted_out = True

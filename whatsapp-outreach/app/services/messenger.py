@@ -10,6 +10,7 @@ from app.db.session import SessionLocal
 from app.db.models import Campaign, CampaignStatus, Contact, Message, MessageStatus, Template
 from app.providers.registry import get_provider
 from app.services.rate_limiter import TokenBucketRateLimiter
+from app.services.safety import daily_guard, is_opt_out_text
 from app.services import templating
 
 log = get_logger("messenger")
@@ -77,6 +78,20 @@ class OutreachQueue:
                 if contact.opted_out:
                     msg.status = MessageStatus.opt_out; camp.failed += 1
                     db.commit(); continue
+                # Anti-Ban Guard: حد يومي + منع تكرار بين الحملات (safety.py)
+                # نافذة الـ dedup هنا تحمي الرقم من إرسال حملتين مختلفتين لنفس الشخص في وقت متقارب.
+                # والـ dedup مهمته حماية الرقم من حملتين متزامنتين — لا من نفس الرسالة.
+                ok, reason = daily_guard.can_send(contact.phone)
+                if not ok and "duplicate" in reason:
+                    # مكرر من حملة أخرى حديثة → تخطَّ هذه الرسالة نهائيًا
+                    msg.status = MessageStatus.opt_out
+                    db.commit(); continue
+                if not ok:
+                    msg.status = MessageStatus.queued  # بلوغ الحد اليومي → إعادة الجدولة لاحقًا
+                    log.warning(f"guard hold ({reason}) -> {contact.phone}")
+                    db.commit()
+                    self.q.put(campaign_id)   # أعد الحملة للطابور لتكملة باقي الرسائل
+                    db.close(); return
                 self.limiter.acquire()
                 msg.status = MessageStatus.sending; db.commit()
                 try:
@@ -89,6 +104,7 @@ class OutreachQueue:
                     msg.status = MessageStatus.sent
                     msg.provider_message_id = res.provider_message_id
                     camp.sent += 1
+                    daily_guard.record_send(contact.phone)
                     log.info(f"sent -> {contact.phone} ({res.provider_message_id})")
                 else:
                     msg.status = MessageStatus.failed

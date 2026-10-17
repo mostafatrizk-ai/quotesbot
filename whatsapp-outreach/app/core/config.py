@@ -16,5 +16,8 @@ class Settings(BaseSettings):
     warmup_enabled: bool = True
     provider: str = "mock"  # mock | cloud_api | baileys
     api_key: str = "outreach-admin-key"
+    # Anti-Ban Guard (app/services/safety.py)
+    max_daily_messages: int = 500          # حد يومي إجمالي لحماية الرقم
+    dedup_window_seconds: int = 3600       # لا تكرار لنفس الرقم خلال ساعة
 
 settings = Settings()
