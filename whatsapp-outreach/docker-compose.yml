@@ -5,7 +5,11 @@ services:
     ports: ["8000:8000"]
     environment:
       DATABASE_URL: sqlite:////srv/app/data/outreach.db
-      PROVIDER: ${PROVIDER:-mock}
+      PROVIDER: ${PROVIDER:-evolution}
+      EVOLUTION_BASE_URL: ${EVOLUTION_BASE_URL:-}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-outreach}
+      EVOLUTION_WEBHOOK_TOKEN: ${EVOLUTION_WEBHOOK_TOKEN:-}
       WA_CLOUD_TOKEN: ${WA_CLOUD_TOKEN:-}
       WA_CLOUD_PHONE_NUMBER_ID: ${WA_CLOUD_PHONE_NUMBER_ID:-}
       API_KEY: ${API_KEY:-outreach-admin-key}

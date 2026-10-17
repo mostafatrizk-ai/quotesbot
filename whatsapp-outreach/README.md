@@ -65,3 +65,31 @@ python -m pytest -q   # 8 اختبارات تغطي التدفق الكامل
 - **Deduplication**: منع إرسال رقم لنفس الجهة خلال `DEDUP_WINDOW_SECONDS=3600` (يحمي من تداخل حملتين)
 - **Opt-out موسّع**: stop / optout / unsubscribe / إيقاف / إلغاء / قفي / خروج — عربي وإنجليزي، مع تطابق بداية الجملة ("stop now")
 - **حالة الحارس ظاهرة في `/health`**: `{"guard": {"sent_today": 42, "daily_cap": 500, ...}}`
+
+
+## 🔌 Evolution API (المزوّد الافتراضي الحالي)
+
+النظام الآن يعمل افتراضيًا مع **Evolution API v2** (Evolution-API/WhatsApp) — سيرفر واتساب خاص بك.
+
+### المتغيرات المطلوبة
+```env
+PROVIDER=evolution
+EVOLUTION_BASE_URL=http://your-evolution-server:8080   # أو https://...
+EVOLUTION_API_KEY=<الـ global apikey من إعدادات السيرفر>
+EVOLUTION_INSTANCE=outreach                            # اسم الـ instance
+EVOLUTION_WEBHOOK_TOKEN=<توكن عشوائي تختاره أنت>       # لحماية webhook الخاص بك
+```
+
+### خطوات الربط على سيرفر Evolution
+1. أنشئ instance باسم `outreach` واربطه برقمك عبر QR (`POST /instance/create` أو لوحة manager).
+2. فعّل الـ webhook للـ instance على:
+   `https://<host-نظامنا>/webhooks/evolution/outreach`
+   مع events: `MESSAGES_UPSERT` + `MESSAGES_UPDATE`، وضع `EVOLUTION_WEBHOOK_TOKEN` في الـ header مخصصًا باسم `X-Evolution-Token` (أو bearerSecretKey حسب إصدارك).
+3. الإرسال يتم تلقائيًا عبر `POST {base}/message/sendText/{instance}` مع هيدر `apikey`.
+
+### ما يحدث داخليًا
+- Webhook `/webhooks/evolution/{instance}` يستقبل DLR (DELIVERED/READ/FAILED) ويحدّث حالة الرسالة فورًا.
+- الردود الواردة تدخل Inbox، وكلمات مثل **إيقاف / stop** تسجّل opt-out تلقائي وتوقف كل الرسائل لذلك الرقم.
+- كل الحماية السابقة سارية: حد يومي + dedup + rate limiting + jitter + retry.
+
+⚠️ تنبيه: Evolution API يستخدم WhatsApp Web (غير رسمي) — أبقِ الحد اليومي منخفضًا (50–100 للأيام الأولى) وحمّله على رقم مخصص للحملات وليس رقمك الشخصي.

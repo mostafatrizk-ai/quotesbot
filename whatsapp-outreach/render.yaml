@@ -12,7 +12,15 @@ services:
       - key: DATABASE_URL
         value: sqlite:////data/outreach.db   # ضع Disk Path = /data في إعدادات Render، أو استخدم Postgres أدناه
       - key: PROVIDER
-        value: mock                          # بدّله إلى cloud_api بعد إعداد توكن Meta
+        value: evolution                     # المزوّد الافتراضي: Evolution API (سيرفرك الخاص)
+      - key: EVOLUTION_BASE_URL
+        sync: false                          # مثال: http://your-vps:8080
+      - key: EVOLUTION_API_KEY
+        sync: false                          # global apikey من Evolution
+      - key: EVOLUTION_INSTANCE
+        value: outreach
+      - key: EVOLUTION_WEBHOOK_TOKEN
+        generateValue: true                  # ضع نفس القيمة في webhook bearerSecretKey بالـ instance
       - key: API_KEY
         generateValue: true                  # Render/Manus ينشئ مفتاحًا عشوائيًا آمنًا
       - key: WEBHOOK_VERIFY_TOKEN
