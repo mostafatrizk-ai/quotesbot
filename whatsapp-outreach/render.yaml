@@ -1,0 +1,31 @@
+# ملف نشر جاهز — يعمل مع Manus (الذي ينشر على Render) أو Render مباشرة
+services:
+  - type: web
+    name: whatsapp-outreach
+    runtime: docker          # يستخدم Dockerfile الموجود
+    plan: free               # يمكن رفعه إلى starter عند الحاجة
+    region: frankfurt        # قريب من مستخدمي الشرق الأوسط (اختر oregon عند الحاجة)
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////data/outreach.db   # ضع Disk Path = /data في إعدادات Render، أو استخدم Postgres أدناه
+      - key: PROVIDER
+        value: mock                          # بدّله إلى cloud_api بعد إعداد توكن Meta
+      - key: API_KEY
+        generateValue: true                  # Render/Manus ينشئ مفتاحًا عشوائيًا آمنًا
+      - key: WEBHOOK_VERIFY_TOKEN
+        generateValue: true
+      - key: WA_CLOUD_TOKEN
+        sync: false                          # املأه من لوحة المفاتيح Secrets
+      - key: WA_CLOUD_PHONE_NUMBER_ID
+        sync: false
+      - key: MESSAGES_PER_MINUTE
+        value: "20"
+# للاشتراك في قاعدة Postgres دائمة (موصى به للإنتاج):
+# databases:
+#   - name: outreach-db
+#     databaseName: outreach
+#     user: outreach
+# ثم استبدل قيمة DATABASE_URL بـ: postgresql://USER:PASSWORD@HOST/outreach

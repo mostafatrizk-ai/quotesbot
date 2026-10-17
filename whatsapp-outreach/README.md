@@ -49,3 +49,12 @@ python -m pytest -q   # 8 اختبارات تغطي التدفق الكامل
 | GET | /api/v1/campaigns/{id} | تتبيل كل رسالة وحالتها |
 | GET/POST | /webhooks/whatsapp | تحقق Meta + DLR/ردود |
 | GET | /api/v1/inbox · /stats | الردود والإحصائيات |
+
+## 🚀 النشر (Deploy) على Manus / Render
+1. ارفع هذا المجلد على GitHub (فرع `main`).
+2. في Manus: اطلب نشر المشروع — Manus ينشر تلقائيًا عبر **Render** ويقرأ ملف `render.yaml` الموجود هنا (Docker + فحص صحة `/health`).
+   - أو مباشرة من Render: New Web Service → Connect repo → Runtime: Docker.
+3. المتغيرات المهمة: `API_KEY`, `WEBHOOK_VERIFY_TOKEN`, `PROVIDER`, `WA_CLOUD_TOKEN`, `WA_CLOUD_PHONE_NUMBER_ID`.
+4. لتخزين دائم: أضف Persistent Disk بمسار `/data` (أو اشترك في Postgres وحدّث `DATABASE_URL`).
+5. بعد النشر: لوحة الأدمن على `https://<your-app>.onrender.com/` والـ API docs على `/docs`.
+> ملاحظة: وضع `baileys` لا يعمل على استضافة بدون Node sidecar؛ استخدم `cloud_api` للإنتاج.
