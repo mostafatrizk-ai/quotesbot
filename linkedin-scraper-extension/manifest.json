@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LinkedIn Contact Finder - Phone & Email Scraper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "استخراج أرقام التليفونات والإيميلات من ملفات LinkedIn الشخصية ونتائج البحث وشبكات التواصل - مثل SignalHire و ContactOut",
   "permissions": [
     "storage",

@@ -42,6 +42,38 @@
     return uniq.filter(e => !BAD_EMAILS.test(e));
   }
 
+  // ---------- فك الأرقام المخفية جزئياً (Masked Phones) ----------
+  // لينكدإن أحياناً يخفي جزء من الرقم هكذا: +20 1•• ••• 4567 أو (555) •••-1234
+  // نحاول استرجاع الجزء الظاهر فقط وإعلام المستخدم أنه غير مكتمل
+  const MASK_CHARS = /[•∙●▪*×xX]/;
+
+  function extractMaskedPhones(text) {
+    if (!text) return [];
+    const out = [];
+    const seen = new Set();
+    // نمط: جزء أرقام + أقنعة + جزء أرقام (رقم مقنع جزئياً مثل +20 1•• ••• 4567)
+    const re = /(?:\+|00)?[\d][\d\s\-().]{0,8}(?:[•∙●▪×]{1,4}[\s\-().]?){2,}[•∙●▪×]?\s*[\d][\d\s\-().]{0,9}\d/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const raw = m[0].trim();
+      const maskedCount = (raw.match(/[•∙●▪×]/g) || []).length;
+      if (maskedCount < 2) continue;
+      const digits = raw.replace(/\D/g, '');
+      // الرقم المقنع المفيد لازم يكون فيه أرقام ظاهرة معقولة + طول إجمالي قريب من رقم حقيقي
+      if (digits.length < 3 || raw.replace(/\s/g, '').length > 22) continue;
+      const key = raw.replace(/\s+/g, '');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        number: raw.replace(/[•∙●▪×]/g, '#'),
+        visibleDigits: digits,
+        maskedDigits: maskedCount,
+        complete: false
+      });
+    }
+    return out;
+  }
+
   function extractPhones(text) {
     if (!text) return [];
     const results = new Set();
@@ -76,15 +108,63 @@
     return 'Phone';
   }
 
+  // ---------- كشف قفل الحائط (Auth Wall / Rate Limit) ----------
+  function isAuthWall(doc) {
+    const text = (doc.body ? doc.body.innerText : '') || '';
+    if (/sign in|join now|log in to see|create an account|تسجيل الدخول/i.test(text)) {
+      // لو مفيش أي عنصر بروفايل حقيقي في الصفحة → غالباً إحنا في صفحة auth-wall
+      const hasProfile = !!doc.querySelector('h1, .pv-top-card, [class*="topcard"], meta[property="og:title"]');
+      if (!hasProfile) return true;
+    }
+    return false;
+  }
+
+  // ---------- قراءة الأرقام من الـ React Fiber internal state ----------
+  // لينكدإن أحياناً يخزن الرقم الكامل في حالة المكون الداخلية حتى لو معروض مقنع/مختفي في DOM
+  function readPhonesFromReactFiber(doc) {
+    const found = new Set();
+    try {
+      const nodes = doc.querySelectorAll('[data-section], .pv-contact-info, #contact, section, div');
+      let scanned = 0;
+      for (const el of nodes) {
+        if (scanned++ > 3000) break; // حد أقصى للأداء
+        const key = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+        if (!key) continue;
+        let fiber = el[key];
+        let depth = 0;
+        while (fiber && depth < 25) {
+          const memo = fiber.memoizedProps || fiber.memoizedState;
+          if (memo) {
+            let str;
+            try { str = JSON.stringify(memo); } catch (e) { str = ''; }
+            if (str && /\d{7,}/.test(str) && /(phone|mobile|diialable|dialable|countryCode)/i.test(str)) {
+              // التقاط قيم حقول الهاتف تحديداً
+              const phoneValRe = /"(?:[a-zA-Z]*[Pp]hone[a-zA-Z]*|mobileNo|diialableNumber|dialableNumber|number)"\s*:\s*"([^"]{7,20})"/g;
+              let m;
+              while ((m = phoneValRe.exec(str)) !== null) {
+                const norm = normalizePhone(m[1]);
+                if (norm) found.add(norm);
+              }
+            }
+          }
+          fiber = fiber.return;
+          depth++;
+        }
+      }
+    } catch (e) { /* تجاهل — هذه محاولة إضافية فقط */ }
+    return [...found];
+  }
+
   // ---------- استخراج بيانات ملف شخصي من الصفحة كاملة ----------
   function parseProfileDocument(doc) {
-    const out = { emails: [], phones: [], raw: {} };
+    const out = { emails: [], phones: [], raw: {}, authWall: isAuthWall(doc) };
 
     // 1) اسم الشخص من الـ meta tags أولاً (الأدق)
     const ogTitle = doc.querySelector('meta[property="og:title"]');
     out.fullName = ogTitle
       ? ogTitle.content.split('·')[0].trim()
       : (doc.querySelector('h1')?.textContent || '').trim();
+    out.fullName = cleanName(out.fullName);
 
     const ogImg = doc.querySelector('meta[property="og:image"]');
     out.photoUrl = ogImg ? ogImg.content : (doc.querySelector('img.profile-photo__image')?.src || null);
@@ -114,7 +194,25 @@
 
     out.emails = extractEmails(pool);
     const phonesRaw = extractPhones(pool);
-    out.phones = phonesRaw.map(p => ({ number: p, type: classifyPhone(pool, p) }));
+    out.phones = phonesRaw.map(p => ({ number: p, type: classifyPhone(pool, p), complete: true }));
+
+    // 4b) الأرقام المقنعة جزئياً (مثل +20 1•• ••• 4567) — نحفظ الجزء الظاهر
+    const masked = extractMaskedPhones(pool).filter(mp =>
+      !phonesRaw.some(p => p.replace(/\D/g, '').includes(mp.visibleDigits))
+    );
+    for (const mp of masked) {
+      out.phones.push({ number: mp.number, type: classifyPhone(pool, mp.number) || 'Phone', complete: false });
+    }
+
+    // 4c) محاولة قراءة الرقم الكامل من React Fiber state (لو مخفي في العرض لكنه موجود في البيانات)
+    try {
+      const fiberPhones = readPhonesFromReactFiber(doc);
+      for (const fp of fiberPhones) {
+        if (!out.phones.some(p => p.number.replace(/\D/g, '') === fp.replace(/\D/g, ''))) {
+          out.phones.push({ number: fp, type: classifyPhone(pool, fp), complete: true, fromState: true });
+        }
+      }
+    } catch (e) { /* تجاهل */ }
 
     // استبعاد الأرقام التي هي جزء من إيميل أو تواريخ
     out.phones = out.phones.filter(p => !/^\+?1?-?\d{8}$/.test(p.number) || p.number.length > 9);
@@ -205,16 +303,21 @@
       .replace(/LinkedIn.*$/, '')
       .replace(/Message\b.*$/, '')
       .replace(/Connect\b.*$/, '')
+      .replace(/[·|•\-–—]\s*[\d,+]+\s*(connections|following)?\s*$/i, '')
+      .replace(/[·|•]+/g, ' ')
       .replace(/\s{2,}/g, ' ')
       .trim();
   }
 
   global.LI_Parser = {
-    EMAIL_REGEX, PHONE_REGEXES,
+    EMAIL_REGEX, PHONE_REGEXES, MASK_CHARS,
     normalizePhone,
     extractEmails,
     extractPhones,
+    extractMaskedPhones,
     classifyPhone,
+    isAuthWall,
+    readPhonesFromReactFiber,
     parseProfileDocument,
     parsePeopleList,
     parseEmbeddedJson,

@@ -73,6 +73,7 @@ progress { width: 100%; height: 8px; margin-top: 8px; accent-color: #0A66C2; }
 .chip { font-size: 11px; padding: 3px 7px; border-radius: 12px; }
 .chip.email { background: #e3f5ea; color: #057642; }
 .chip.phone { background: #fdf3e3; color: #9a6700; }
+.chip.phone.masked { background: #fde8e8; color: #b42318; border: 1px dashed #b42318; }
 .chip.none { background: #eee; color: #777; }
 
 .field { margin-bottom: 12px; }

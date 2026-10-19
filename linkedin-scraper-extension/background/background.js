@@ -39,6 +39,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true });
       return true;
 
+    case 'DOWNLOAD_BLOB': {
+      // MV3 service worker لا يملك URL.createObjectURL — البوب أب يرسل ArrayBuffer هنا
+      const bytes = new Uint8Array(msg.buffer);
+      let binary = '';
+      const CHUNK = 0x8000;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+      }
+      const dataUrl = `data:${msg.mime || 'application/octet-stream'};base64,${btoa(binary)}`;
+      downloadDataURL(dataUrl, msg.filename);
+      sendResponse({ ok: true });
+      return true;
+    }
+
     default:
       // أحداث مثل profile-done / finished تمر للـ popup مباشرة
       break;

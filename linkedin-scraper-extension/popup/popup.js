@@ -58,22 +58,34 @@
     saveSettings(() => {
       chrome.runtime.sendMessage({ action: 'SET_TAB', tabId: activeTab.id });
       const mode = document.querySelector('input[name="mode"]:checked').value;
-      const startMode = mode === 'page' ? 'single' : mode; // content يقرر حسب الـ URL
-      chrome.tabs.sendMessage(activeTab.id, { action: 'START', mode: startMode }, (res) => {
-        if (chrome.runtime.lastError || !res?.ok) {
-          // الكوننت سكريبت مش محقون — حقنه يدوياً ثم ابدأ
-          chrome.scripting.executeScript({
-            target: { tabId: activeTab.id },
-            files: ['content/parser.js', 'content/content.js']
-          }, () => {
-            chrome.scripting.insertCSS({ target: { tabId: activeTab.id }, files: ['styles/content.css'] }, () => {
-              chrome.tabs.sendMessage(activeTab.id, { action: 'START', mode: startMode });
+      // content يقرر المسار حسب الـ URL (auto/single) — وpage ياخد مسار الاستخراج الشامل الفوري
+      const sendStart = () =>
+        chrome.tabs.sendMessage(activeTab.id, { action: 'START', mode }, (res) => {
+          if (chrome.runtime.lastError || !res?.ok) {
+            // الكوننت سكريبت مش محقون — حقنه يدوياً ثم ابدأ
+            chrome.scripting.executeScript({
+              target: { tabId: activeTab.id },
+              files: ['content/parser.js', 'content/content.js']
+            }, () => {
+              chrome.scripting.insertCSS({ target: { tabId: activeTab.id }, files: ['styles/content.css'] }, () => {
+                chrome.tabs.sendMessage(activeTab.id, { action: 'START', mode });
+              });
             });
-          });
-        }
-        setRunningUI(true, 0);
-        setStatus('🏁 بدأ الاستخراج... لا تغلق التاب', 'ok');
-      });
+          }
+        });
+
+      if (mode === 'page') {
+        // استخراج لحظي من الصفحة الحالية بدون تنقل — لا يحتاج liSession
+        sendStart();
+        setStatus('📄 جاري استخراج بيانات الصفحة الحالية...', 'ok');
+        setTimeout(() => { pingContent(); renderResults(); }, 4000);
+        return;
+      }
+
+      chrome.storage.local.set({ liSession: { running: true, listMeta: [] } });
+      sendStart();
+      setRunningUI(true, 0);
+      setStatus('🏁 بدأ الاستخراج... لا تغلق التاب', 'ok');
     });
   });
 
@@ -86,22 +98,20 @@
 
   // ---------- استخراج من رابط ملصوق ----------
   $('#btn-scrape-url').addEventListener('click', () => {
-    const url = $('#profile-url').value.trim();
+    const raw = $('#profile-url').value.trim();
+    // يقبل "username" أو رابط كامل أو رابط بـ query params
+    const url = /^https?:\/\//.test(raw) ? raw : (/^[a-zA-Z0-9%_-]+$/.test(raw) ? `https://www.linkedin.com/in/${raw}/` : raw);
     if (!/https?:\/\/(www\.)?linkedin\.com\/in\//.test(url)) {
-      setStatus('⚠️ الصق رابط بروفايل صحيح: linkedin.com/in/...', 'warn');
+      setStatus('⚠️ الصق رابط بروفايل صحيح: linkedin.com/in/... أو اكتب اليوزرنيم فقط', 'warn');
       return;
     }
     saveSettings(() => {
-      chrome.tabs.update(activeTab.id, { url });
-      setTimeout(() => {
-        chrome.runtime.sendMessage({ action: 'SET_TAB', tabId: activeTab.id });
-        chrome.storage.local.set({ liSession: { running: true, listMeta: [] } });
-        chrome.tabs.sendMessage(activeTab.id, { action: 'START', mode: 'single' }, () => {
-          void chrome.runtime.lastError; // content يستأنف تلقائياً عبر SCRAPE_NOW من background
-        });
+      chrome.runtime.sendMessage({ action: 'SET_TAB', tabId: activeTab.id });
+      chrome.storage.local.set({ liSession: { running: true, listMeta: [] } });
+      chrome.tabs.update(activeTab.id, { url }, () => {
         setRunningUI(true, 0);
-        setStatus('➡️ فتح الرابط وبدء الاستخراج...', 'ok');
-      }, 4000);
+        setStatus('➡️ فتح الرابط... الـ background هيستخرج تلقائياً بعد التحميل', 'ok');
+      });
     });
   });
 
@@ -125,6 +135,9 @@
     if (msg.event === 'finished') {
       setRunningUI(false, results.length);
       setStatus(`🎉 اكتمل! عدد الملفات: ${msg.data.total}`, 'ok');
+    }
+    if (msg.event === 'authwall') {
+      setStatus(`🚫 LinkedIn Auth Wall على: ${shortUrl(msg.data.url)} — جرّب تكبّر فترات الانتظار`, 'warn');
     }
     if (msg.event === 'stopped') {
       setRunningUI(false, results.length);
@@ -156,16 +169,17 @@
     list.innerHTML = results.slice().reverse().map(r => `
       <div class="result-card">
         <div class="rc-head">
-          ${r.photoUrl ? `<img src="${esc(r.photoUrl)}" />` : '<div class="avatar-fallback">${""}</div>'}
+          ${r.photoUrl ? `<img src="${esc(r.photoUrl)}" alt="" />` : '<div class="avatar-fallback"></div>'}
           <div>
             <b>${esc(r.fullName) || '(بدون اسم)'}</b>
             <small>${esc(r.headline)}</small><br/>
-            <a href="${esc(r.profileUrl)}" target="_blank" class="li-link">LinkedIn</a>
+            <a href="${esc(r.profileUrl)}" target="_blank" rel="noopener" class="li-link">LinkedIn</a>
+            ${r.authWall ? '<span class="chip none">🚫 Auth Wall</span>' : ''}
           </div>
         </div>
         <div class="rc-contacts">
           ${(r.emails || []).map(e => `<span class="chip email">✉️ ${esc(e)}</span>`).join('')}
-          ${(r.phones || []).map(p => `<span class="chip phone">📞 ${esc(p.number)} (${p.type})</span>`).join('')}
+          ${(r.phones || []).map(p => `<span class="chip phone${p.complete === false ? ' masked' : ''}">📞 ${esc(p.number)} (${p.type}${p.complete === false ? ' — مخفي جزئياً' : ''})</span>`).join('')}
           ${(!r.emails?.length && !r.phones?.length) ? '<span class="chip none">لا توجد بيانات ظاهرة</span>' : ''}
         </div>
       </div>
@@ -186,11 +200,28 @@
   // ---------- تصدير CSV ----------
   $('#btn-csv').addEventListener('click', () => {
     if (!results.length) return flash('مفيش نتائج تتصدر');
-    chrome.runtime.sendMessage({ action: 'EXPORT_CSV', results });
+    const headers = [
+      'Full Name', 'Headline', 'Current Company', 'Location',
+      'Email(s)', 'Phone(s)', 'Phone Type(s)', 'Phone Status',
+      'LinkedIn URL', 'LinkedIn ID', 'Photo URL', 'Scraped At'
+    ];
+    const rows = results.map(r => ([
+      r.fullName || '', r.headline || '', r.currentCompany || '', r.location || '',
+      (r.emails || []).join('; '),
+      (r.phones || []).map(p => p.number).join('; '),
+      (r.phones || []).map(p => p.type).join('; '),
+      (r.phones || []).map(p => p.complete === false ? 'MASKED' : 'COMPLETE').join('; '),
+      r.profileUrl || '', r.linkedinId || '', r.photoUrl || '', r.scrapedAt || ''
+    ]));
+    const csv = '\uFEFF' + [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+    const encoder = new TextEncoder();
+    downloadViaBackground(encoder.encode(csv).buffer, `linkedin_contacts_${Date.now()}.csv`, 'text/csv;charset=utf-8');
   });
 
   // ---------- تصدير Excel ----------
-  $('#btn-excel').addEventListener('click', () => {
+  $('#btn-excel').addEventListener('click', async () => {
     if (!results.length) return flash('مفيش نتائج تتصدر');
     const rows = results.map(r => ({
       'Full Name': r.fullName,
@@ -200,6 +231,7 @@
       'Email(s)': (r.emails || []).join('; '),
       'Phone(s)': (r.phones || []).map(p => p.number).join('; '),
       'Phone Type': (r.phones || []).map(p => p.type).join('; '),
+      'Phone Status': (r.phones || []).map(p => p.complete === false ? 'MASKED' : 'COMPLETE').join('; '),
       'LinkedIn URL': r.profileUrl,
       'LinkedIn ID': r.linkedinId,
       'Scraped At': r.scrapedAt
@@ -208,30 +240,29 @@
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
     const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([out], { type: 'application/octet-stream' });
-    const reader = new FileReader();
-    reader.onload = () => {
-      chrome.runtime.sendMessage({
-        action: 'EXPORT_EXCEL',
-        dataUrl: reader.result,
-        filename: `linkedin_contacts_${Date.now()}.xlsx`
-      });
-    };
-    reader.readAsDataURL(blob);
+    downloadViaBackground(out, `linkedin_contacts_${Date.now()}.xlsx`,
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   });
 
   // ---------- تصدير JSON ----------
-  $('#btn-json').addEventListener('click', () => {
+  $('#btn-json').addEventListener('click', async () => {
     if (!results.length) return flash('مفيش نتائج تتصدر');
-    const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
-    const reader = new FileReader();
-    reader.onload = () => chrome.runtime.sendMessage({
-      action: 'EXPORT_EXCEL', // نفس مسار التنزيل
-      dataUrl: reader.result,
-      filename: `linkedin_contacts_${Date.now()}.json`
-    });
-    reader.readAsDataURL(blob);
+    const text = JSON.stringify(results, null, 2);
+    const encoder = new TextEncoder();
+    downloadViaBackground(encoder.encode(text).buffer, `linkedin_contacts_${Date.now()}.json`, 'application/json');
   });
+
+  // إرسال ArrayBuffer للـ background worker الذي يحوّله لـ DataURL وينزّله
+  // (kأن MV3 service worker ما بيرفعش Blob URLs — وأيضاً البوب أب بيموت لو اتقفل أثناء التنزيل)
+  function downloadViaBackground(buffer, filename, mime) {
+    chrome.runtime.sendMessage({ action: 'DOWNLOAD_BLOB', buffer, filename, mime }, (res) => {
+      if (chrome.runtime.lastError || !res?.ok) {
+        setStatus('⚠️ فشل التنزيل — جرّب إعادة المحاولة', 'warn');
+      } else {
+        setStatus(`⬇️ جارٍ تنزيل ${filename}`, 'ok');
+      }
+    });
+  }
 
   // ---------- مسح ----------
   $('#btn-clear').addEventListener('click', () => {

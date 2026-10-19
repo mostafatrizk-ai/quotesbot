@@ -32,6 +32,16 @@
       case 'START':
         chrome.storage.local.get(['liSettings'], (r) => {
           state.settings = Object.assign(defaultSettings(), r.liSettings || {});
+          // وضع "الصفحة الحالية": استخراج فوري شامل بدون تنقل
+          if (msg.mode === 'page') {
+            state.running = true;
+            state.mode = 'page';
+            scrapePageWide().then(() => {
+              state.running = false;
+              sendResponse({ ok: true });
+            });
+            return;
+          }
           start(msg.mode);
           sendResponse({ ok: true });
         });
@@ -104,6 +114,74 @@
     updateOverlay('⏹ تم الإيقاف');
   }
 
+  // ---------- وضع "الصفحة الحالية": استخراج شامل بدون تنقل ----------
+  // ياخد كل اللي في الصفحة: بروفايل مفتوح + أي قوائم أشخاص + نص الصفحة كاملاً (إيميلات/أرقام)
+  async function scrapePageWide() {
+    updateOverlay('📄 جاري استخراج كل البيانات الظاهرة في الصفحة...');
+    await sleep(500);
+
+    const bodyText = document.body ? document.body.innerText : '';
+    const pageEmails = P.extractEmails(bodyText);
+    const pagePhones = P.extractPhones(bodyText).map(p => ({ number: p, type: P.classifyPhone(bodyText, p), complete: true }));
+    // الأرقام المقنعة جزئياً في نص الصفحة
+    const pageMasked = P.extractMaskedPhones(bodyText)
+      .filter(mp => !pagePhones.some(p => p.number.replace(/\D/g, '').includes(mp.visibleDigits)))
+      .map(mp => ({ number: mp.number, type: 'Phone', complete: false }));
+    for (const mp of pageMasked) pagePhones.push(mp);
+
+    let record = null;
+    if (/\/in\/[^/?#]+/.test(location.pathname)) {
+      // صفحة بروفايل — استخدم المحرك الكامل
+      tryRevealContactInfo();
+      await sleep(1500);
+      const data = P.parseProfileDocument(document);
+      record = makeRecord(data, {});
+    } else {
+      // صفحة قائمة/بيت — سجل الصفحة نفسها كسجل واحد بكل ما فيها
+      record = {
+        fullName: (document.querySelector('h1')?.textContent || '').trim(),
+        headline: '',
+        location: '',
+        currentCompany: '',
+        profileUrl: location.href.split('?')[0],
+        linkedinId: '',
+        photoUrl: '',
+        emails: pageEmails,
+        phones: pagePhones,
+        peopleFound: P.parsePeopleList(document).length,
+        scrapedAt: new Date().toISOString()
+      };
+    }
+
+    // دمج أي إيميلات/أرقام إضافية ظهرت في نص الصفحة مع بيانات البروفايل
+    const emailSet = new Set([...(record.emails || []), ...pageEmails]);
+    record.emails = [...emailSet];
+    const phoneSeen = new Set((record.phones || []).map(p => p.number));
+    for (const ph of pagePhones) if (!phoneSeen.has(ph.number)) record.phones.push(ph);
+
+    state.results = [record];
+    persistResults();
+    notifyPopup('profile-done', record);
+    updateOverlay(`✅ من هذه الصفحة: ${record.emails.length} إيميل، ${record.phones.length} رقم`);
+    notifyPopup('finished', { total: 1 });
+  }
+
+  function makeRecord(data, meta) {
+    return {
+      fullName: clean(data.fullName) || (meta && meta.fullName) || '',
+      headline: clean(data.headline) || (meta && meta.headline) || '',
+      location: data.location || (meta && meta.location) || '',
+      currentCompany: data.currentCompany || '',
+      profileUrl: data.profileUrl || location.href.split('?')[0],
+      linkedinId: data.linkedinId || (meta && meta.linkedinId) || '',
+      photoUrl: data.photoUrl || (meta && meta.photoUrl) || '',
+      emails: data.emails,
+      phones: data.phones,
+      authWall: !!data.authWall,
+      scrapedAt: new Date().toISOString()
+    };
+  }
+
   // ---------- جمع قائمة الأشخاص من الصفحة الحالية + التمرير اللانهائي ----------
   async function collectListAndQueue() {
     updateOverlay('🔍 جاري جمع روابط الملفات...');
@@ -134,6 +212,8 @@
 
     state.queue = [...map.values()].slice(0, state.settings.maxProfiles).map(p => p.profileUrl);
     state.listMeta = [...map.values()];
+    // حفظ الجلسة فوراً حتى يعرف الـ background/content أنه شغال بعد أول navigation
+    chrome.storage.local.set({ liSession: { running: true, listMeta: state.listMeta } });
     notifyPopup('queued', { count: state.queue.length });
     updateOverlay(`📋 تم رصد ${state.queue.length} ملف — بدء الزيارة...`);
     processNext();
@@ -180,30 +260,27 @@
     if (!state.running) return;
     updateOverlay('⏳ قراءة الملف الشخصي...');
 
+    // LinkedIn SPA — يستحسن ننتظر ظهور عناصر البروفايل قبل التحليل
+    await waitForProfile();
+
     // محاولة فتح نافذة Contact Info (هناك يظهر الإيميل الشخصي غالباً)
     if (state.settings.openContactView) {
       tryRevealContactInfo();
       await sleep(1500);
     } else {
-      await sleep(800); // مهلة بسيطة للانتظار حتى يت渲染
+      await sleep(800); // مهلة بسيطة حتى يتريتم المحتوى المتأخر
     }
 
     const data = P.parseProfileDocument(document);
 
     // دمج مع بيانات القائمة إن وجدت (name/headline/location)
     const meta = (state.listMeta || []).find(m => m.profileUrl === location.href.split('?')[0]);
-    const record = {
-      fullName: clean(data.fullName) || (meta && meta.fullName) || '',
-      headline: clean(data.headline) || (meta && meta.headline) || '',
-      location: data.location || (meta && meta.location) || '',
-      currentCompany: data.currentCompany || '',
-      profileUrl: data.profileUrl || location.href.split('?')[0],
-      linkedinId: data.linkedinId || (meta && meta.linkedinId) || '',
-      photoUrl: data.photoUrl || (meta && meta.photoUrl) || '',
-      emails: data.emails,
-      phones: data.phones,
-      scrapedAt: new Date().toISOString()
-    };
+    const record = makeRecord(data, meta || {});
+
+    if (record.authWall && !record.emails.length && !record.phones.length) {
+      updateOverlay(`🚫 ${record.profileUrl}: LinkedIn Auth Wall — تخطي هذا الملف`);
+      notifyPopup('authwall', { url: record.profileUrl });
+    }
 
     state.results.push(record);
     persistResults();
@@ -229,20 +306,56 @@
   }
 
   // ---------- كشف معلومات الاتصال المختفية ----------
+  // يفتح Contact info modal + يضغط Show all + يحاول إظهار أي عناصر مخفية CSS/ARIA
   function tryRevealContactInfo() {
-    const showMore = document.querySelector('.pv-contact-info__contact-link, button:has-text("Contact info")');
+    const clickIfFound = (els, re) => {
+      for (const el of els) {
+        if (re.test((el.textContent || '').trim())) { el.click(); return true; }
+      }
+      return false;
+    };
+
     const links = [...document.querySelectorAll('a, button')];
-    const contactLink = links.find(el => /contact\s*info/i.test(el.textContent));
-    if (contactLink) contactLink.click();
+    // 1) فتح نافذة Contact Info (يظهر فيها الإيميل الشخصي غالباً)
+    clickIfFound(links, /^(contact info|معلومات الاتصال|عرض معلومات الاتصال)/i) ||
+      links.find(el => /contact\s*info/i.test(el.textContent))?.click();
 
     setTimeout(() => {
-      // زر "Show all" لإظهار كل الأرقام والإيميلات
+      // 2) زر "Show all / عرض الكل" لإظهار كل الأرقام والإيميلات المختصرة
       const modal = document.querySelector('.artdeco-modal, .pv-contact-info');
       if (modal) {
-        const showAll = [...modal.querySelectorAll('button')].find(b => /show all|عرض الكل/i.test(b.textContent));
-        if (showAll) showAll.click();
+        clickIfFound([...modal.querySelectorAll('button, a')], /show all|view all|عرض الكل/i);
       }
+      // 3) فك إخفاء أي عنصر محتجب بـ aria-hidden أو display:none داخل أقسام التواصل
+      const contactAreas = document.querySelectorAll('.pv-contact-info, #contact, [data-section="Contact"], section.artdecl-card');
+      contactAreas.forEach(area => {
+        area.querySelectorAll('[aria-hidden="true"], .visually-hidden, [style*="display: none"]').forEach(h => {
+          h.removeAttribute('aria-hidden');
+          h.classList.remove('visually-hidden');
+          h.style.display = '';
+        });
+      });
     }, 700);
+
+    // 4) تمرير خفيف لأقسام التواصل — لينكدإن يرندر محتواها عند الظهور (lazy render)
+    const contactSection = document.querySelector('#contact, .pv-contact-info, [data-section="Contact"]');
+    if (contactSection) {
+      try { contactSection.scrollIntoView({ behavior: 'instant', block: 'center' }); } catch (e) {}
+    }
+  }
+
+  // ---------- انتظار ظهور بيانات البروفايل (SPA lazy render) ----------
+  async function waitForProfile(maxMs = 12000) {
+    const start = Date.now();
+    while (Date.now() - start < maxMs) {
+      const ready = document.querySelector('h1') ||
+                    document.querySelector('meta[property="og:title"]') ||
+                    document.querySelector('[class*="topcard"]') ||
+                    document.querySelector('.pv-top-card');
+      if (ready) return true;
+      await sleep(500);
+    }
+    return false;
   }
 
   function finish() {
