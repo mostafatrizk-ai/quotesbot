@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <img src="../icons/icon48.png" alt="logo" />
+    <div>
+      <h1>LinkedIn Contact Finder</h1>
+      <p>إيستخرج الإيميلات والأرقام زي SignalHire & ContactOut</p>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="scraper">🚀 السكراب</button>
+    <button class="tab-btn" data-tab="results">📊 النتائج <span id="count-badge" class="badge">0</span></button>
+    <button class="tab-btn" data-tab="settings">⚙️ الإعدادات</button>
+  </nav>
+
+  <!-- ===== تبويب السكراب ===== -->
+  <section id="tab-scraper" class="tab-panel active">
+    <div class="mode-cards">
+      <label class="mode-card">
+        <input type="radio" name="mode" value="auto" checked />
+        <span class="card-body">
+          <b>🔄 تلقائي (الأفضل)</b>
+          <small>صفحة بحث / Connections — يزور كل الملفات ويستخرج بياناتها واحداً تلو الآخر</small>
+        </span>
+      </label>
+      <label class="mode-card">
+        <input type="radio" name="mode" value="single" />
+        <span class="card-body">
+          <b>👤 ملف واحد</b>
+          <small>استخراج إيميل + أرقام البروفايل المفتوح حالياً فقط</small>
+        </span>
+      </label>
+      <label class="mode-card">
+        <input type="radio" name="mode" value="page" />
+        <span class="card-body">
+          <b>📄 الصفحة الحالية</b>
+          <small>كل ما يمكن استخراجه من الصفحة المفتوحة الآن بدون تنقل</small>
+        </span>
+      </label>
+    </div>
+
+    <div class="url-row">
+      <input type="text" id="profile-url" placeholder="أو الصق رابط بروفايل هنا: https://www.linkedin.com/in/username/" />
+      <button id="btn-scrape-url" class="btn ghost">من رابط</button>
+    </div>
+
+    <div class="controls">
+      <button id="btn-start" class="btn primary">▶️ بدء الاستخراج</button>
+      <button id="btn-stop" class="btn danger" disabled>⏹ إيقاف</button>
+    </div>
+
+    <div id="status-box" class="status">جاهز — افتح لينكدإن واضغط ابدأ</div>
+    <progress id="progress" max="100" value="0"></progress>
+  </section>
+
+  <!-- ===== تبويب النتائج ===== -->
+  <section id="tab-results" class="tab-panel">
+    <div class="export-bar">
+      <button id="btn-csv" class="btn success">⬇️ تصدير CSV</button>
+      <button id="btn-excel" class="btn success">⬇️ تصدير Excel</button>
+      <button id="btn-json" class="btn success">⬇️ JSON</button>
+      <button id="btn-clear" class="btn danger small">🗑 مسح</button>
+    </div>
+    <div id="results-list" class="results-list">
+      <p class="empty">لا توجد نتائج بعد</p>
+    </div>
+  </section>
+
+  <!-- ===== تبويب الإعدادات ===== -->
+  <section id="tab-settings" class="tab-panel">
+    <div class="field">
+      <label>الحد الأقصى لعدد الملفات <span id="val-max">100</span></label>
+      <input type="range" id="set-max" min="5" max="500" step="5" value="100" />
+    </div>
+    <div class="field">
+      <label>أقل فترة انتظار بين الصفحات (مللي ثانية) <span id="val-min">2500</span></label>
+      <input type="range" id="set-delaymin" min="1000" max="15000" step="500" value="2500" />
+    </div>
+    <div class="field">
+      <label>أقصى فترة انتظار <span id="val-maxd">6000</span></label>
+      <input type="range" id="set-delaymax" min="2000" max="30000" step="500" value="6000" />
+    </div>
+    <div class="field checkbox">
+      <label><input type="checkbox" id="set-scroll" checked /> تمرير تلقائي لتحميل نتائج البحث كلها</label>
+    </div>
+    <div class="field checkbox">
+      <label><input type="checkbox" id="set-contact" checked /> فتح نافذة Contact Info لاكتشاف الإيميل الشخصي</label>
+    </div>
+    <div class="field checkbox">
+      <label><input type="checkbox" id="set-pav" checked /> إضافة "People also viewed" للطابور تلقائياً</label>
+    </div>
+    <button id="btn-save-settings" class="btn primary block">💾 حفظ الإعدادات</button>
+    <p class="hint">⚠️ نصيحة: خلي الفترات كبيرة عشان حسابك ما يتقفل — لينكدإن بيراقب سرعة التنقل.</p>
+  </section>
+
+  <script src="../libs/xlsx.full.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
