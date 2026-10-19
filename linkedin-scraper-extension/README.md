@@ -31,6 +31,19 @@ linkedin-scraper-extension/
 └── icons/                     # أيقونات 16/48/128
 ```
 
+## 📥 التحميل من GitHub
+
+**الطريقة A — ملف ZIP (بدون git):**
+1. افتح صفحة الريبوزيتوري على GitHub.
+2. اضغط زر **Code** الأخضر ← **Download ZIP**.
+3. فك ضغط الملف → ستجد مجلد `linkedin-scraper-extension` جاهزاً للتحميل في كروم.
+
+**الطريقة B — سطر الأوامر:**
+```bash
+git clone <رابط-الريبوزيتوري>.git
+cd <اسم-الريبوزيتوري>/linkedin-scraper-extension
+```
+
 ## 🚀 طريقة التشغيل
 
 1. افتح `chrome://extensions`
