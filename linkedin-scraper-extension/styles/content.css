@@ -1,0 +1,25 @@
+/* Overlay شفاف أعلى يسار الصفحة يعرض حالة السكراب */
+#li-scraper-overlay {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 2147483647;
+  display: none;
+  max-width: 340px;
+  background: linear-gradient(135deg, #0A66C2, #004182);
+  color: #fff;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 14px;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  direction: rtl;
+  text-align: right;
+  animation: li-fadein .25s ease;
+}
+
+@keyframes li-fadein {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
